@@ -1,6 +1,7 @@
 package org.ibiter.star;
 
 import android.app.Fragment;
+import android.content.ContentValues;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
@@ -12,29 +13,52 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.baidu.location.BDLocation;
 import com.baidu.location.BDLocationListener;
 import com.baidu.location.Poi;
+import com.baidu.mapapi.http.HttpClient;
+
+
 import org.ibiter.star.LocationService;
+
+import java.io.BufferedOutputStream;
+import java.io.DataOutputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
+import java.util.ArrayList;
+import java.util.List;
+import static android.R.attr.data;
+import static org.ibiter.star.R.id.textView1;
 
 /**
  * Created by Antiver M on 2016/9/23.
  */
 
-public class LocationFragment extends Fragment {
+public class LocationFragment extends Fragment implements View.OnClickListener{
 
     private LocationService locationService;
     private TextView LocationResult;
     private Button startLocation;
+    private Button SendLocation;
+    private double latitude;
+    private double lontitude;
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.location,container,false);
         TextView txt_content = (TextView) view.findViewById(R.id.txt_content);
-        LocationResult = (TextView) view.findViewById(R.id.textView1);
+        LocationResult = (TextView) view.findViewById(textView1);
         LocationResult.setMovementMethod(ScrollingMovementMethod.getInstance());
         startLocation = (Button) view.findViewById(R.id.addfence);
+        SendLocation = (Button) view.findViewById(R.id.SendLocation);
+        startLocation.setOnClickListener(this);
+        SendLocation.setOnClickListener(this);
         return view;
     }
 
@@ -79,10 +103,24 @@ public class LocationFragment extends Fragment {
         } else if (type == 1) {
             locationService.setLocationOption(locationService.getOption());
         }
-        startLocation.setOnClickListener(new View.OnClickListener() {
-
-            @Override
-            public void onClick(View v) {
+//        startLocation.setOnClickListener(new View.OnClickListener() {
+//
+//            @Override
+//            public void onClick(View v) {
+//                if (startLocation.getText().toString().equals(getString(R.string.startlocation))) {
+//                    locationService.start();// 定位SDK
+//                    // start之后会默认发起一次定位请求，开发者无须判断isstart并主动调用request
+//                    startLocation.setText(getString(R.string.stoplocation));
+//                } else {
+//                    locationService.stop();
+//                    startLocation.setText(getString(R.string.startlocation));
+//                }
+//            }
+//        });
+    }
+    public void onClick(View v){
+        switch (v.getId()){
+            case R.id.addfence:
                 if (startLocation.getText().toString().equals(getString(R.string.startlocation))) {
                     locationService.start();// 定位SDK
                     // start之后会默认发起一次定位请求，开发者无须判断isstart并主动调用request
@@ -91,10 +129,44 @@ public class LocationFragment extends Fragment {
                     locationService.stop();
                     startLocation.setText(getString(R.string.startlocation));
                 }
-            }
-        });
-    }
+                break;
+            case R.id.SendLocation:
+                Thread t = new Thread(){
+                    @Override
+                    public void run() {
+                        //提交的数据需要经过url编码，英文和数字编码后不变
+                        try {
+                            URL url = new URL("http://ibiter.org/API/SendLocation.php");
+                            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                            conn.setRequestMethod("POST");
+                            conn.setConnectTimeout(5000);
+                            conn.setReadTimeout(5000);
+                            //拼接出要提交的数据的字符串
+                            //String data = "id=1&Location='123'";
+                            String data = "id=1&Location='"+latitude+","+lontitude+"'";
+                            //添加post请求的两行属性
+                            conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+                            conn.setRequestProperty("Content-Length", data.length() + "");
+                            //设置打开输出流
+                            conn.setDoOutput(true);
+                            //拿到输出流
+                            OutputStream os = conn.getOutputStream();
+                            //使用输出流往服务器提交数据
+                            os.write(data.getBytes());
+                            if(conn.getResponseCode() == 200){
+                                LocationResult.setText("success"+lontitude+","+latitude);
+                            }
+                        } catch (Exception e) {
+                            // TODO Auto-generated catch block
+                            e.printStackTrace();
+                        }
+                    }
+                };
+                t.start();
+                break;
+        }
 
+    }
 
     /*****
      * @see copy funtion to you project
@@ -120,8 +192,10 @@ public class LocationFragment extends Fragment {
                 sb.append(location.getLocTypeDescription());
                 sb.append("\nlatitude : ");// 纬度
                 sb.append(location.getLatitude());
+                latitude = location.getLatitude();
                 sb.append("\nlontitude : ");// 经度
                 sb.append(location.getLongitude());
+                lontitude = location.getLongitude();
                 sb.append("\nradius : ");// 半径
                 sb.append(location.getRadius());
                 sb.append("\nCountryCode : ");// 国家码
